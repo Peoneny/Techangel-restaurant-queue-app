@@ -9,4 +9,4 @@ COPY . .
 
 EXPOSE 8080
 
-CMD ["python", "app.py"]
+CMD ["python", "app_with_auth.py"]
