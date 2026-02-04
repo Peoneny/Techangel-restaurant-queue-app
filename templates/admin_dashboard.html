@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แอดมิน - จัดการคิว</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            padding: 20px 30px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #f5576c;
+            font-size: 1.8em;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .admin-badge {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .logout-btn {
+            background: #333;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+
+        .logout-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #f5576c;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: 700;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        .admin-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-next {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .btn-refresh {
+            background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+            color: white;
+        }
+
+        .btn-clear {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+            color: white;
+        }
+
+        .current-call {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            margin-bottom: 20px;
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .current-call h3 {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .current-call .call-name {
+            font-size: 3em;
+            font-weight: 700;
+            margin: 10px 0;
+        }
+
+        .current-call .call-details {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .no-queue {
+            opacity: 0.7;
+            font-size: 1.5em;
+        }
+
+        #queueList, #historyList {
+            list-style: none;
+        }
+
+        #queueList li, #historyList li {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #f5576c;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+
+        #queueList li:hover {
+            transform: translateX(5px);
+        }
+
+        .queue-info {
+            flex-grow: 1;
+        }
+
+        .queue-name {
+            font-weight: 600;
+            font-size: 18px;
+            color: #333;
+        }
+
+        .queue-details {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .queue-position {
+            background: #f5576c;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 18px;
+        }
+
+        .next-queue {
+            border-left-color: #4facfe;
+            background: #f0faff;
+        }
+
+        .next-queue .queue-position {
+            background: #4facfe;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            z-index: 1000;
+            max-width: 300px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        .status-online {
+            background: #4caf50;
+            box-shadow: 0 0 5px #4caf50;
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .admin-controls {
+                grid-template-columns: 1fr;
+            }
+
+            .current-call .call-name {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👨‍💼 แอดมิน - จัดการคิว</h1>
+            <div class="user-info">
+                <span class="admin-badge">
+                    🔑 <span id="username"></span>
+                    <span class="status-indicator status-online"></span>
+                </span>
+                <button class="logout-btn" onclick="logout()">ออกจากระบบ</button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="currentQueue">0</div>
+                <div class="stat-label">คิวปัจจุบัน</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="totalServed">0</div>
+                <div class="stat-label">ให้บริการแล้ว</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="availableSlots">100</div>
+                <div class="stat-label">ที่ว่าง</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="utilization">0%</div>
+                <div class="stat-label">ความคับคั่ง</div>
+            </div>
+        </div>
+
+        <!-- Current Call Display -->
+        <div class="current-call" id="currentCall">
+            <div class="no-queue">ไม่มีคิว - กด "เรียกคิวถัดไป"</div>
+        </div>
+
+        <!-- Admin Controls -->
+        <div class="card">
+            <h2>⚙️ การจัดการ</h2>
+            <div class="admin-controls">
+                <button class="btn-next" onclick="callNext()">
+                    📢 เรียกคิวถัดไป
+                </button>
+                <button class="btn-refresh" onclick="refreshQueue()">
+                    🔄 รีเฟรชคิว
+                </button>
+                <button class="btn-clear" onclick="clearQueue()">
+                    🗑️ ล้างคิวทั้งหมด
+                </button>
+            </div>
+        </div>
+
+        <!-- Queue List -->
+        <div class="card">
+            <h2>📋 คิวทั้งหมด</h2>
+            <ul id="queueList">
+                <li style="text-align: center; color: #666;">กำลังโหลด...</li>
+            </ul>
+        </div>
+
+        <!-- History -->
+        <div class="card">
+            <h2>📜 ประวัติการเรียก (10 รายการล่าสุด)</h2>
+            <ul id="historyList">
+                <li style="text-align: center; color: #666;">ยังไม่มีประวัติ</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let eventSource = null;
+        let lastCalled = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await checkAuth();
+            refreshQueue();
+            refreshHistory();
+            initEventStream();
+        });
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/check-auth');
+                const data = await response.json();
+
+                if (!response.ok || !data.authenticated) {
+                    window.location.href = '/';
+                    return;
+                }
+
+                currentUser = data.user;
+                document.getElementById('username').textContent = currentUser.username;
+
+                // Redirect if not admin
+                if (currentUser.role !== 'admin') {
+                    window.location.href = '/user';
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                window.location.href = '/';
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/logout', { method: 'POST' });
+                window.location.href = '/';
+            } catch (error) {
+                console.error('Logout failed:', error);
+            }
+        }
+
+        async function callNext() {
+            try {
+                const response = await fetch('/next', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.called) {
+                    lastCalled = data.called;
+                    showCurrentCall(data.called);
+                    showNotification(`เรียก: ${data.called.name} (${data.remaining} คงเหลือ)`, 'success');
+                    refreshQueue();
+                    refreshHistory();
+                } else {
+                    showNotification('ไม่มีคนในคิว', 'info');
+                    showNoQueue();
+                }
+            } catch (error) {
+                showNotification('เกิดข้อผิดพลาด', 'error');
+                console.error('Error:', error);
+            }
+        }
+
+        async function refreshQueue() {
+            try {
+                const response = await fetch('/queue');
+                const data = await response.json();
+
+                if (data.success) {
+                    displayQueue(data.queue);
+                    updateStats(data);
+                }
+            } catch (error) {
+                console.error('Error refreshing queue:', error);
+            }
+        }
+
+        async function refreshHistory() {
+            try {
+                const response = await fetch('/history?limit=10');
+                const data = await response.json();
+
+                if (data.success) {
+                    displayHistory(data.history);
+                    document.getElementById('totalServed').textContent = data.total;
+                }
+            } catch (error) {
+                console.error('Error refreshing history:', error);
+            }
+        }
+
+        async function clearQueue() {
+            if (!confirm('คุณแน่ใจหรือไม่ที่จะล้างคิวทั้งหมด?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/clear', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification(`ล้างคิว ${data.cleared} รายการเรียบร้อย`, 'success');
+                    showNoQueue();
+                    refreshQueue();
+                }
+            } catch (error) {
+                showNotification('เกิดข้อผิดพลาด', 'error');
+                console.error('Error:', error);
+            }
+        }
+
+        function displayQueue(queue) {
+            const queueList = document.getElementById('queueList');
+
+            if (queue.length === 0) {
+                queueList.innerHTML = '<li style="text-align: center; color: #666;">ไม่มีคิวในขณะนี้</li>';
+                return;
+            }
+
+            queueList.innerHTML = queue.map((entry, index) => `
+                <li class="${index === 0 ? 'next-queue' : ''}">
+                    <div class="queue-info">
+                        <div class="queue-name">
+                            ${entry.name} ${index === 0 ? '(ถัดไป)' : ''}
+                        </div>
+                        <div class="queue-details">
+                            👥 ${entry.party_size} คน | 
+                            📱 ${entry.phone || '-'} | 
+                            🆔 #${entry.id} |
+                            👤 จองโดย: ${entry.created_by || '-'}
+                        </div>
+                    </div>
+                    <div class="queue-position">#${index + 1}</div>
+                </li>
+            `).join('');
+        }
+
+        function displayHistory(history) {
+            const historyList = document.getElementById('historyList');
+
+            if (history.length === 0) {
+                historyList.innerHTML = '<li style="text-align: center; color: #666;">ยังไม่มีประวัติ</li>';
+                return;
+            }
+
+            historyList.innerHTML = history.reverse().map(entry => `
+                <li>
+                    <div class="queue-info">
+                        <div class="queue-name">${entry.name}</div>
+                        <div class="queue-details">
+                            👥 ${entry.party_size} คน | 
+                            ⏰ ${new Date(entry.called_at).toLocaleString('th-TH')} |
+                            👤 เรียกโดย: ${entry.called_by || '-'}
+                        </div>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        function updateStats(data) {
+            document.getElementById('currentQueue').textContent = data.total;
+            document.getElementById('availableSlots').textContent = data.available_slots;
+            
+            const utilization = ((data.total / data.capacity) * 100).toFixed(1);
+            document.getElementById('utilization').textContent = utilization + '%';
+        }
+
+        function showCurrentCall(called) {
+            const currentCallDiv = document.getElementById('currentCall');
+            currentCallDiv.innerHTML = `
+                <h3>กำลังเรียก</h3>
+                <div class="call-name">${called.name}</div>
+                <div class="call-details">
+                    👥 ${called.party_size} คน | 
+                    📱 ${called.phone || '-'} | 
+                    🆔 #${called.id}
+                </div>
+            `;
+        }
+
+        function showNoQueue() {
+            const currentCallDiv = document.getElementById('currentCall');
+            currentCallDiv.innerHTML = '<div class="no-queue">ไม่มีคิว - กด "เรียกคิวถัดไป"</div>';
+        }
+
+        function initEventStream() {
+            eventSource = new EventSource('/events');
+            
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleRealtimeEvent(data);
+            };
+
+            eventSource.onerror = () => {
+                console.error('EventSource error');
+            };
+        }
+
+        function handleRealtimeEvent(event) {
+            console.log('Realtime event:', event);
+
+            switch(event.event) {
+                case 'queue_added':
+                    showNotification(`${event.data.name} เข้าคิวแล้ว`, 'info');
+                    refreshQueue();
+                    break;
+                case 'queue_called':
+                    refreshQueue();
+                    refreshHistory();
+                    break;
+                case 'queue_cleared':
+                    showNoQueue();
+                    refreshQueue();
+                    break;
+            }
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `<strong>${message}</strong>`;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

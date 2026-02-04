@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>จองคิว - ผู้ใช้งาน</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: white;
+            padding: 20px 30px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #667eea;
+            font-size: 1.8em;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-badge {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 8px 20px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .logout-btn {
+            background: #f44336;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+
+        .logout-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button.primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            width: 100%;
+        }
+
+        button.primary:hover {
+            transform: translateY(-2px);
+        }
+
+        button.primary:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: 700;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        #result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        #queueList {
+            list-style: none;
+        }
+
+        #queueList li {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #4facfe;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .queue-info {
+            flex-grow: 1;
+        }
+
+        .queue-name {
+            font-weight: 600;
+            font-size: 18px;
+            color: #333;
+        }
+
+        .queue-details {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .queue-position {
+            background: #4facfe;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 18px;
+        }
+
+        .my-queue {
+            border-left-color: #f5576c;
+            background: #fff3f3;
+        }
+
+        .my-queue .queue-position {
+            background: #f5576c;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            z-index: 1000;
+            max-width: 300px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 15px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🍽️ ระบบจองคิวร้านอาหาร</h1>
+            <div class="user-info">
+                <span class="user-badge">👤 <span id="username"></span></span>
+                <button class="logout-btn" onclick="logout()">ออกจากระบบ</button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="currentQueue">0</div>
+                <div class="stat-label">คิวปัจจุบัน</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="availableSlots">100</div>
+                <div class="stat-label">ที่ว่าง</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="myPosition">-</div>
+                <div class="stat-label">ลำดับของฉัน</div>
+            </div>
+        </div>
+
+        <!-- Reserve Form -->
+        <div class="card">
+            <h2>📝 จองคิว</h2>
+            <div class="input-group">
+                <label for="name">ชื่อ *</label>
+                <input type="text" id="name" placeholder="กรอกชื่อของคุณ" required>
+            </div>
+            <div class="input-group">
+                <label for="phone">เบอร์โทรศัพท์</label>
+                <input type="tel" id="phone" placeholder="08X-XXX-XXXX">
+            </div>
+            <div class="input-group">
+                <label for="partySize">จำนวนคน *</label>
+                <select id="partySize">
+                    <option value="1">1 คน</option>
+                    <option value="2">2 คน</option>
+                    <option value="3">3 คน</option>
+                    <option value="4">4 คน</option>
+                    <option value="5">5 คน</option>
+                    <option value="6">6 คน</option>
+                    <option value="7">7 คน</option>
+                    <option value="8">8 คน</option>
+                    <option value="9">9 คน</option>
+                    <option value="10">10+ คน</option>
+                </select>
+            </div>
+            <button class="primary" onclick="reserve()">จองคิว</button>
+            <div id="result"></div>
+        </div>
+
+        <!-- Queue Display -->
+        <div class="card">
+            <h2>📋 คิวปัจจุบัน</h2>
+            <ul id="queueList">
+                <li style="text-align: center; color: #666;">กำลังโหลด...</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let eventSource = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            await checkAuth();
+            refreshQueue();
+            initEventStream();
+        });
+
+        async function checkAuth() {
+            try {
+                const response = await fetch('/check-auth');
+                const data = await response.json();
+
+                if (!response.ok || !data.authenticated) {
+                    window.location.href = '/';
+                    return;
+                }
+
+                currentUser = data.user;
+                document.getElementById('username').textContent = currentUser.username;
+
+                // Redirect if admin
+                if (currentUser.role === 'admin') {
+                    window.location.href = '/admin';
+                }
+            } catch (error) {
+                console.error('Auth check failed:', error);
+                window.location.href = '/';
+            }
+        }
+
+        async function logout() {
+            try {
+                await fetch('/logout', { method: 'POST' });
+                window.location.href = '/';
+            } catch (error) {
+                console.error('Logout failed:', error);
+            }
+        }
+
+        async function reserve() {
+            const name = document.getElementById('name').value;
+            const phone = document.getElementById('phone').value;
+            const partySize = parseInt(document.getElementById('partySize').value);
+
+            if (!name.trim()) {
+                showResult('กรุณากรอกชื่อ', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/reserve', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, phone, party_size: partySize })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showResult(
+                        `✅ ${data.message}<br>รหัสคิว: #${data.entry.id}<br>เวลารอประมาณ: ${data.estimated_wait_minutes} นาที`,
+                        'success'
+                    );
+                    document.getElementById('name').value = '';
+                    document.getElementById('phone').value = '';
+                    refreshQueue();
+                } else {
+                    showResult(`❌ ${data.error || 'เกิดข้อผิดพลาด'}`, 'error');
+                }
+            } catch (error) {
+                showResult('❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์', 'error');
+            }
+        }
+
+        async function refreshQueue() {
+            try {
+                const response = await fetch('/queue');
+                const data = await response.json();
+
+                if (data.success) {
+                    displayQueue(data.queue);
+                    updateStats(data);
+                }
+            } catch (error) {
+                console.error('Error refreshing queue:', error);
+            }
+        }
+
+        function displayQueue(queue) {
+            const queueList = document.getElementById('queueList');
+
+            if (queue.length === 0) {
+                queueList.innerHTML = '<li style="text-align: center; color: #666;">ไม่มีคิวในขณะนี้</li>';
+                document.getElementById('myPosition').textContent = '-';
+                return;
+            }
+
+            let myPosition = -1;
+            queueList.innerHTML = queue.map((entry, index) => {
+                const isMyQueue = entry.created_by === currentUser.username;
+                if (isMyQueue) myPosition = index + 1;
+
+                return `
+                    <li class="${isMyQueue ? 'my-queue' : ''}">
+                        <div class="queue-info">
+                            <div class="queue-name">
+                                ${entry.name} ${isMyQueue ? '(คุณ)' : ''}
+                            </div>
+                            <div class="queue-details">
+                                👥 ${entry.party_size} คน | 
+                                📱 ${entry.phone || '-'} | 
+                                🆔 #${entry.id}
+                            </div>
+                        </div>
+                        <div class="queue-position">#${index + 1}</div>
+                    </li>
+                `;
+            }).join('');
+
+            document.getElementById('myPosition').textContent = myPosition > 0 ? myPosition : '-';
+        }
+
+        function updateStats(data) {
+            document.getElementById('currentQueue').textContent = data.total;
+            document.getElementById('availableSlots').textContent = data.available_slots;
+        }
+
+        function initEventStream() {
+            eventSource = new EventSource('/events');
+            
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleRealtimeEvent(data);
+            };
+
+            eventSource.onerror = () => {
+                console.error('EventSource error');
+            };
+        }
+
+        function handleRealtimeEvent(event) {
+            console.log('Realtime event:', event);
+
+            switch(event.event) {
+                case 'queue_added':
+                    showNotification(`${event.data.name} เข้าคิวแล้ว`, 'info');
+                    refreshQueue();
+                    break;
+                case 'queue_called':
+                    const isMyQueue = event.data.created_by === currentUser.username;
+                    if (isMyQueue) {
+                        showNotification(`🎉 ถึงคิวของคุณแล้ว!`, 'success');
+                    } else {
+                        showNotification(`เรียก: ${event.data.name}`, 'info');
+                    }
+                    refreshQueue();
+                    break;
+                case 'queue_cleared':
+                    showNotification('ล้างคิวแล้ว', 'warning');
+                    refreshQueue();
+                    break;
+            }
+        }
+
+        function showResult(message, type) {
+            const result = document.getElementById('result');
+            result.innerHTML = message;
+            result.className = type;
+            result.style.display = 'block';
+
+            setTimeout(() => {
+                result.style.display = 'none';
+            }, 5000);
+        }
+
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `<strong>${message}</strong>`;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบจองคิวร้านอาหาร - Enhanced</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .card h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f0f0f0;
+            padding-bottom: 10px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: 600;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button.secondary {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        button.danger {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 600;
+            margin-left: 10px;
+        }
+
+        .status-healthy {
+            background: #4caf50;
+            color: white;
+        }
+
+        .status-warning {
+            background: #ff9800;
+            color: white;
+        }
+
+        .status-error {
+            background: #f44336;
+            color: white;
+        }
+
+        #result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: 600;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        #queueList, #historyList {
+            list-style: none;
+        }
+
+        #queueList li, #historyList li {
+            background: #f8f9fa;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: transform 0.2s;
+        }
+
+        #queueList li:hover, #historyList li:hover {
+            transform: translateX(5px);
+        }
+
+        .queue-info {
+            flex-grow: 1;
+        }
+
+        .queue-name {
+            font-weight: 600;
+            font-size: 18px;
+            color: #333;
+        }
+
+        .queue-details {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+
+        .queue-position {
+            background: #667eea;
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2em;
+            font-weight: 700;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #666;
+        }
+
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            z-index: 1000;
+            max-width: 300px;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 1.8em;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            button {
+                width: 100%;
+                margin-right: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍽️ ระบบจองคิวร้านอาหาร</h1>
+
+        <!-- System Status -->
+        <div class="card">
+            <h2>สถานะระบบ <span id="systemStatus" class="status-badge status-healthy">ปกติ</span></h2>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="currentQueue">0</div>
+                    <div class="stat-label">คิวปัจจุบัน</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="availableSlots">100</div>
+                    <div class="stat-label">ที่ว่าง</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalServed">0</div>
+                    <div class="stat-label">ให้บริการแล้ว</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Reserve Queue -->
+        <div class="card">
+            <h2>📝 จองคิว</h2>
+            <div class="input-group">
+                <label for="name">ชื่อ *</label>
+                <input type="text" id="name" placeholder="กรอกชื่อของคุณ" required>
+            </div>
+            <div class="input-group">
+                <label for="phone">เบอร์โทรศัพท์</label>
+                <input type="tel" id="phone" placeholder="08X-XXX-XXXX">
+            </div>
+            <div class="input-group">
+                <label for="partySize">จำนวนคน *</label>
+                <select id="partySize">
+                    <option value="1">1 คน</option>
+                    <option value="2">2 คน</option>
+                    <option value="3">3 คน</option>
+                    <option value="4">4 คน</option>
+                    <option value="5">5 คน</option>
+                    <option value="6">6 คน</option>
+                    <option value="7">7 คน</option>
+                    <option value="8">8 คน</option>
+                    <option value="9">9 คน</option>
+                    <option value="10">10+ คน</option>
+                </select>
+            </div>
+            <button onclick="reserve()">จองคิว</button>
+            <div id="result"></div>
+        </div>
+
+        <!-- Admin Controls -->
+        <div class="card">
+            <h2>⚙️ การจัดการ</h2>
+            <button onclick="callNext()" class="secondary">เรียกคิวถัดไป</button>
+            <button onclick="refreshQueue()">รีเฟรชคิว</button>
+            <button onclick="clearQueue()" class="danger">ล้างคิวทั้งหมด</button>
+        </div>
+
+        <!-- Queue Display -->
+        <div class="card">
+            <h2>📋 คิวปัจจุบัน</h2>
+            <div id="queueContainer">
+                <div class="loading">กำลังโหลด...</div>
+            </div>
+            <ul id="queueList"></ul>
+        </div>
+
+        <!-- History -->
+        <div class="card">
+            <h2>📜 ประวัติการเรียก</h2>
+            <ul id="historyList"></ul>
+        </div>
+    </div>
+
+    <script>
+        // Global state
+        let eventSource = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            refreshQueue();
+            refreshHistory();
+            initEventStream();
+            startHealthCheck();
+        });
+
+        // Real-time updates via Server-Sent Events
+        function initEventStream() {
+            eventSource = new EventSource('/events');
+            
+            eventSource.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleRealtimeEvent(data);
+            };
+
+            eventSource.onerror = (error) => {
+                console.error('EventSource error:', error);
+                showNotification('การเชื่อมต่อ real-time ขัดข้อง', 'error');
+            };
+        }
+
+        function handleRealtimeEvent(event) {
+            console.log('Realtime event:', event);
+
+            switch(event.event) {
+                case 'queue_added':
+                    showNotification(`${event.data.name} เข้าคิวแล้ว`, 'success');
+                    refreshQueue();
+                    break;
+                case 'queue_called':
+                    showNotification(`เรียก: ${event.data.name}`, 'info');
+                    refreshQueue();
+                    refreshHistory();
+                    break;
+                case 'queue_cleared':
+                    showNotification('ล้างคิวแล้ว', 'warning');
+                    refreshQueue();
+                    break;
+                case 'queue_expired':
+                    showNotification(`คิวหมดอายุ: ${event.data.name}`, 'warning');
+                    refreshQueue();
+                    break;
+            }
+        }
+
+        // Reserve queue
+        async function reserve() {
+            const name = document.getElementById('name').value;
+            const phone = document.getElementById('phone').value;
+            const partySize = parseInt(document.getElementById('partySize').value);
+
+            if (!name.trim()) {
+                showResult('กรุณากรอกชื่อ', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/reserve', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: name,
+                        phone: phone,
+                        party_size: partySize
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showResult(
+                        `✅ ${data.message}<br>
+                        รหัสคิว: #${data.entry.id}<br>
+                        เวลารอประมาณ: ${data.estimated_wait_minutes} นาที`,
+                        'success'
+                    );
+                    document.getElementById('name').value = '';
+                    document.getElementById('phone').value = '';
+                    refreshQueue();
+                } else {
+                    showResult(`❌ ${data.error || 'เกิดข้อผิดพลาด'}`, 'error');
+                }
+            } catch (error) {
+                showResult('❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์', 'error');
+                console.error('Error:', error);
+            }
+        }
+
+        // Call next in queue
+        async function callNext() {
+            try {
+                const response = await fetch('/next', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.called) {
+                    showNotification(`เรียก: ${data.called.name} (${data.remaining} คงเหลือ)`, 'success');
+                    refreshQueue();
+                    refreshHistory();
+                } else {
+                    showNotification('ไม่มีคนในคิว', 'info');
+                }
+            } catch (error) {
+                showNotification('เกิดข้อผิดพลาด', 'error');
+                console.error('Error:', error);
+            }
+        }
+
+        // Refresh queue display
+        async function refreshQueue() {
+            try {
+                const response = await fetch('/queue');
+                const data = await response.json();
+
+                if (data.success) {
+                    displayQueue(data.queue);
+                    updateStats(data);
+                }
+            } catch (error) {
+                console.error('Error refreshing queue:', error);
+            }
+        }
+
+        // Display queue
+        function displayQueue(queue) {
+            const queueList = document.getElementById('queueList');
+            const container = document.getElementById('queueContainer');
+
+            if (queue.length === 0) {
+                container.innerHTML = '<div class="info" style="padding: 20px; text-align: center;">ไม่มีคิวในขณะนี้</div>';
+                queueList.innerHTML = '';
+                return;
+            }
+
+            container.innerHTML = '';
+            queueList.innerHTML = queue.map((entry, index) => `
+                <li>
+                    <div class="queue-info">
+                        <div class="queue-name">${entry.name}</div>
+                        <div class="queue-details">
+                            👥 ${entry.party_size} คน | 
+                            📱 ${entry.phone || '-'} | 
+                            🆔 #${entry.id}
+                        </div>
+                    </div>
+                    <div class="queue-position">#${index + 1}</div>
+                </li>
+            `).join('');
+        }
+
+        // Refresh history
+        async function refreshHistory() {
+            try {
+                const response = await fetch('/history?limit=10');
+                const data = await response.json();
+
+                if (data.success) {
+                    displayHistory(data.history);
+                    document.getElementById('totalServed').textContent = data.total;
+                }
+            } catch (error) {
+                console.error('Error refreshing history:', error);
+            }
+        }
+
+        // Display history
+        function displayHistory(history) {
+            const historyList = document.getElementById('historyList');
+
+            if (history.length === 0) {
+                historyList.innerHTML = '<li style="text-align: center; color: #666;">ยังไม่มีประวัติ</li>';
+                return;
+            }
+
+            historyList.innerHTML = history.reverse().map(entry => `
+                <li>
+                    <div class="queue-info">
+                        <div class="queue-name">${entry.name}</div>
+                        <div class="queue-details">
+                            👥 ${entry.party_size} คน | 
+                            ⏰ ${new Date(entry.called_at).toLocaleString('th-TH')}
+                        </div>
+                    </div>
+                </li>
+            `).join('');
+        }
+
+        // Clear queue
+        async function clearQueue() {
+            if (!confirm('คุณแน่ใจหรือไม่ที่จะล้างคิวทั้งหมด?')) {
+                return;
+            }
+
+            try {
+                const response = await fetch('/clear', {
+                    method: 'POST'
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification(`ล้างคิว ${data.cleared} รายการเรียบร้อย`, 'success');
+                    refreshQueue();
+                }
+            } catch (error) {
+                showNotification('เกิดข้อผิดพลาด', 'error');
+                console.error('Error:', error);
+            }
+        }
+
+        // Update stats
+        function updateStats(data) {
+            document.getElementById('currentQueue').textContent = data.total;
+            document.getElementById('availableSlots').textContent = data.available_slots;
+        }
+
+        // Health check
+        async function startHealthCheck() {
+            setInterval(async () => {
+                try {
+                    const response = await fetch('/health');
+                    const data = await response.json();
+
+                    const statusBadge = document.getElementById('systemStatus');
+                    if (data.status === 'healthy') {
+                        statusBadge.textContent = 'ปกติ';
+                        statusBadge.className = 'status-badge status-healthy';
+                    } else {
+                        statusBadge.textContent = 'ผิดปกติ';
+                        statusBadge.className = 'status-badge status-error';
+                    }
+                } catch (error) {
+                    const statusBadge = document.getElementById('systemStatus');
+                    statusBadge.textContent = 'ขัดข้อง';
+                    statusBadge.className = 'status-badge status-error';
+                }
+            }, 30000); // Check every 30 seconds
+        }
+
+        // Show result message
+        function showResult(message, type) {
+            const result = document.getElementById('result');
+            result.innerHTML = message;
+            result.className = type;
+            result.style.display = 'block';
+
+            setTimeout(() => {
+                result.style.display = 'none';
+            }, 5000);
+        }
+
+        // Show notification
+        function showNotification(message, type) {
+            const notification = document.createElement('div');
+            notification.className = `notification ${type}`;
+            notification.innerHTML = `<strong>${message}</strong>`;
+            document.body.appendChild(notification);
+
+            setTimeout(() => {
+                notification.style.animation = 'slideIn 0.3s ease-out reverse';
+                setTimeout(() => notification.remove(), 300);
+            }, 3000);
+        }
+    </script>
+</body>
+</html>
