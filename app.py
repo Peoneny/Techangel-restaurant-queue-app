@@ -1,3 +1,4 @@
+import os
 from flask import Flask, request, jsonify, render_template
 from threading import Lock
 
@@ -29,4 +30,6 @@ def next_queue():
             return jsonify({"called": queue.pop(0)})
         return jsonify({"called": None})
 
-app.run(host="0.0.0.0", port=8000)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
