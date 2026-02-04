@@ -833,7 +833,7 @@ if __name__ == '__main__':
     init_app()
     
     try:
-        app.run(host="0.0.0.0", port=8000, threaded=True, debug=False)
+        app.run(host="0.0.0.0", port=8080, threaded=True, debug=False)
     except KeyboardInterrupt:
         logger.info("Shutting down...")
         scheduler.stop()
