@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<body>
+  <h2>จองคิวร้านอาหาร</h2>
+  <input id="name" placeholder="ชื่อ">
+  <button onclick="reserve()">จองคิว</button>
+  <p id="result"></p>
+
+<script>
+function reserve() {
+  fetch('/queue', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: document.getElementById('name').value})
+  })
+  .then(res => res.json())
+  .then(data => {
+    document.getElementById('result').innerText =
+      "คุณอยู่คิวที่ " + data.position;
+  });
+}
+</script>
+</body>
+</html>
