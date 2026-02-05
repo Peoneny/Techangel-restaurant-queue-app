@@ -6,6 +6,7 @@ from functools import wraps
 import logging
 import time
 import json
+import os
 from enum import Enum
 from dataclasses import dataclass, asdict
 from typing import Optional, Dict, List
@@ -20,6 +21,9 @@ import hashlib
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)  # สำหรับ session
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=24)
+
+# Scheduler Token (ควรเก็บใน environment variable)
+SCHEDULER_TOKEN = os.getenv('SCHEDULER_TOKEN', 'your-super-secret-scheduler-token-change-this')
 
 # Logging configuration
 logging.basicConfig(
@@ -125,6 +129,37 @@ def admin_required(f):
         return f(*args, **kwargs)
     return wrapper
 
+def scheduler_auth_required(f):
+    """Require valid scheduler token"""
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        # ตรวจสอบ header จาก Cloud Scheduler
+        scheduler_header = request.headers.get('X-Cloudscheduler')
+        auth_header = request.headers.get('Authorization')
+        
+        # อนุญาตให้ผ่านถ้ามี X-Cloudscheduler header (จาก GCP)
+        if scheduler_header:
+            logger.info(f"Scheduler request from Cloud Scheduler: {scheduler_header}")
+            return f(*args, **kwargs)
+        
+        # หรือตรวจสอบ Bearer Token
+        if auth_header:
+            try:
+                token_type, token = auth_header.split(' ', 1)
+                if token_type == 'Bearer' and token == SCHEDULER_TOKEN:
+                    logger.info("Scheduler request with valid token")
+                    return f(*args, **kwargs)
+            except ValueError:
+                pass
+        
+        logger.warning(f"Unauthorized scheduler request from {request.remote_addr}")
+        return jsonify({
+            'error': 'Unauthorized',
+            'error_code': 'SCHEDULER_AUTH_REQUIRED'
+        }), 401
+    
+    return wrapper
+
 # ============================================================================
 # ERROR HANDLING CLASSES
 # ============================================================================
@@ -141,6 +176,7 @@ class ErrorCode(Enum):
     AUTH_REQUIRED = "AUTH_REQUIRED"
     ADMIN_REQUIRED = "ADMIN_REQUIRED"
     INVALID_CREDENTIALS = "INVALID_CREDENTIALS"
+    SCHEDULER_AUTH_REQUIRED = "SCHEDULER_AUTH_REQUIRED"
 
 class QueueException(Exception):
     """Base exception for queue operations"""
@@ -250,6 +286,7 @@ class PubSubEvent(Enum):
     QUEUE_CALLED = "queue_called"
     QUEUE_CLEARED = "queue_cleared"
     QUEUE_EXPIRED = "queue_expired"
+    SCHEDULER_CLEARED = "scheduler_cleared"
 
 class PubSubSystem:
     """Simple pub/sub system for real-time notifications"""
@@ -287,6 +324,24 @@ class PubSubSystem:
         logger.info(f"Published event: {event_type.value}")
 
 pubsub = PubSubSystem()
+
+# ============================================================================
+# SCHEDULER LOGS
+# ============================================================================
+
+scheduler_logs = deque(maxlen=50)  # เก็บ log 50 รายการล่าสุด
+scheduler_logs_lock = RLock()
+
+def add_scheduler_log(action: str, details: dict):
+    """Add scheduler action to log"""
+    with scheduler_logs_lock:
+        log_entry = {
+            'timestamp': datetime.now().isoformat(),
+            'action': action,
+            'details': details
+        }
+        scheduler_logs.append(log_entry)
+        logger.info(f"[SCHEDULER] {action}: {details}")
 
 # ============================================================================
 # SCHEDULER
@@ -571,6 +626,213 @@ def admin_dashboard():
     return render_template('admin_dashboard.html')
 
 # ============================================================================
+# CLOUD SCHEDULER ROUTES
+# ============================================================================
+
+@app.route('/scheduler/clear-queue', methods=['POST'])
+@handle_errors
+@scheduler_auth_required
+def scheduler_clear_queue():
+    """
+    Cloud Scheduler endpoint: ล้างคิวทุกวัน
+    ต้องมี header Authorization: Bearer TOKEN หรือ X-Cloudscheduler
+    """
+    try:
+        with lock:
+            cleared_count = len(queue)
+            cleared_items = list(queue)  # เก็บข้อมูลก่อนล้าง
+            queue.clear()
+            
+            logger.info(f"[SCHEDULER] Cleared {cleared_count} items from queue")
+        
+        # บันทึก log
+        add_scheduler_log('daily_clear', {
+            'cleared_count': cleared_count,
+            'triggered_by': 'cloud_scheduler',
+            'items': [
+                item.to_dict() if isinstance(item, QueueEntry) else item
+                for item in cleared_items
+            ][:10]  # เก็บแค่ 10 รายการแรก
+        })
+        
+        # ส่ง event
+        pubsub.publish(PubSubEvent.SCHEDULER_CLEARED, {
+            'cleared_count': cleared_count
+        })
+        
+        return jsonify({
+            "success": True,
+            "message": "ล้างคิวสำเร็จ (Cloud Scheduler)",
+            "cleared_count": cleared_count,
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error(f"Error in scheduler_clear_queue: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/scheduler/clear-old-history', methods=['POST'])
+@handle_errors
+@scheduler_auth_required
+def scheduler_clear_old_history():
+    """
+    Cloud Scheduler endpoint: ล้างประวัติเก่าที่เกิน 30 วัน
+    """
+    try:
+        cutoff_date = datetime.now() - timedelta(days=30)
+        
+        with history_lock:
+            original_count = len(history)
+            
+            # กรองเฉพาะข้อมูลที่ใหม่กว่า 30 วัน
+            filtered_history = []
+            for item in history:
+                try:
+                    if 'timestamp' in item:
+                        item_date = datetime.fromisoformat(item['timestamp'])
+                        if item_date > cutoff_date:
+                            filtered_history.append(item)
+                except (ValueError, KeyError):
+                    # ถ้า parse ไม่ได้ ให้เก็บไว้
+                    filtered_history.append(item)
+            
+            history.clear()
+            history.extend(filtered_history)
+            
+            removed_count = original_count - len(history)
+            logger.info(f"[SCHEDULER] Cleared {removed_count} old history items")
+        
+        # บันทึก log
+        add_scheduler_log('clear_old_history', {
+            'removed_count': removed_count,
+            'original_count': original_count,
+            'remaining_count': len(filtered_history),
+            'cutoff_date': cutoff_date.isoformat()
+        })
+        
+        return jsonify({
+            "success": True,
+            "message": "ล้างประวัติเก่าสำเร็จ",
+            "removed_count": removed_count,
+            "remaining_count": len(filtered_history),
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error(f"Error in scheduler_clear_old_history: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/scheduler/stats', methods=['GET'])
+@handle_errors
+@scheduler_auth_required
+def scheduler_stats():
+    """ดูสถิติการทำงานของ scheduler"""
+    try:
+        with lock:
+            current_queue_count = len(queue)
+        
+        with history_lock:
+            total_history = len(history)
+        
+        with scheduler_logs_lock:
+            logs = list(scheduler_logs)
+            
+            # นับจำนวนครั้งที่ clear
+            clear_count = sum(1 for log in logs if log['action'] == 'daily_clear')
+            history_clear_count = sum(1 for log in logs if log['action'] == 'clear_old_history')
+            
+            # หา log ล่าสุดของแต่ละประเภท
+            last_clear = next(
+                (log for log in reversed(logs) if log['action'] == 'daily_clear'),
+                None
+            )
+            last_history_clear = next(
+                (log for log in reversed(logs) if log['action'] == 'clear_old_history'),
+                None
+            )
+        
+        return jsonify({
+            "success": True,
+            "current_queue": current_queue_count,
+            "total_history": total_history,
+            "scheduler_stats": {
+                "total_daily_clears": clear_count,
+                "total_history_clears": history_clear_count,
+                "last_daily_clear": last_clear,
+                "last_history_clear": last_history_clear,
+                "total_scheduler_actions": len(logs)
+            },
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        logger.error(f"Error in scheduler_stats: {str(e)}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/scheduler/logs', methods=['GET'])
+@handle_errors
+@admin_required
+def scheduler_logs_view():
+    """ดู scheduler logs (Admin only)"""
+    try:
+        limit = request.args.get('limit', 20, type=int)
+        
+        with scheduler_logs_lock:
+            logs = list(scheduler_logs)[-limit:]
+        
+        return jsonify({
+            "success": True,
+            "logs": logs,
+            "total": len(logs),
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route('/scheduler/test-clear', methods=['POST'])
+@handle_errors
+@admin_required
+def test_scheduler_clear():
+    """ทดสอบการล้างคิวด้วยตัวเอง (Admin only)"""
+    try:
+        # เรียกใช้ฟังก์ชันเดียวกับ scheduler
+        with lock:
+            cleared_count = len(queue)
+            queue.clear()
+        
+        add_scheduler_log('manual_test_clear', {
+            'cleared_count': cleared_count,
+            'triggered_by': session.get('username'),
+            'note': 'Manual test by admin'
+        })
+        
+        return jsonify({
+            "success": True,
+            "message": "ทดสอบล้างคิวสำเร็จ",
+            "cleared_count": cleared_count,
+            "timestamp": datetime.now().isoformat()
+        })
+    
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# ============================================================================
 # QUEUE ROUTES
 # ============================================================================
 
@@ -736,7 +998,8 @@ def events():
             pubsub.subscribe(PubSubEvent.QUEUE_ADDED),
             pubsub.subscribe(PubSubEvent.QUEUE_CALLED),
             pubsub.subscribe(PubSubEvent.QUEUE_CLEARED),
-            pubsub.subscribe(PubSubEvent.QUEUE_EXPIRED)
+            pubsub.subscribe(PubSubEvent.QUEUE_EXPIRED),
+            pubsub.subscribe(PubSubEvent.SCHEDULER_CLEARED)
         ]
         
         try:
@@ -827,6 +1090,8 @@ def init_app():
     logger.info("DEFAULT ACCOUNTS:")
     logger.info("Admin - username: admin, password: admin123")
     logger.info("User  - username: user, password: user123")
+    logger.info("=" * 60)
+    logger.info(f"SCHEDULER TOKEN: {SCHEDULER_TOKEN}")
     logger.info("=" * 60)
 
 if __name__ == '__main__':

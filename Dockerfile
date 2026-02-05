@@ -1,12 +1,13 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY requirements_enhanced.txt .
-RUN pip install --no-cache-dir -r requirements_enhanced.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-EXPOSE 8080
+ENV PORT=8000
+ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "app_with_auth.py"]
+CMD ["gunicorn", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "app:app"]
