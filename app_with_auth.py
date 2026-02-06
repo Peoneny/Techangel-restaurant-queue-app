@@ -13,6 +13,7 @@ from typing import Optional, Dict, List
 import queue as thread_queue
 import secrets
 import hashlib
+import pymysql
 
 # ============================================================================
 # CONFIGURATION & SETUP
@@ -1094,8 +1095,46 @@ def init_app():
     logger.info(f"SCHEDULER TOKEN: {SCHEDULER_TOKEN}")
     logger.info("=" * 60)
 
+# database test
+def get_db_connection():
+    # 1. ดึงค่าจาก Environment Variables ที่เราตั้งไว้ใน Cloud Run
+    db_user = os.environ.get('DB_USER')
+    db_pass = os.environ.get('DB_PASS')
+    db_name = os.environ.get('DB_NAME')
+    instance_connection_name = os.environ.get('INSTANCE_CONNECTION_NAME')
+
+    # 2. กำหนดตำแหน่งของ Unix Socket
+    # บน Cloud Run จะอยู่ที่ /cloudsql/ ตามด้วย Connection Name เสมอ
+    socket_path = f'/cloudsql/{instance_connection_name}'
+
+    # 3. สร้างการเชื่อมต่อ
+    try:
+        conn = pymysql.connect(
+            user=db_user,
+            password=db_pass,
+            db=db_name,
+            unix_socket=socket_path,
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor
+        )
+        return conn
+    except Exception as e:
+        print(f"Error connecting to DB: {e}")
+        return None
+    
+def get_data():
+    db = get_db_connection()
+    if db:
+        with db.cursor() as cursor:
+            cursor.execute("SELECT NOW() as now;") # ทดสอบดึงเวลาปัจจุบันจาก DB
+            result = cursor.fetchone()
+            print(f"Connected! Database time: {result['now']}")
+        db.close()
+
+
 if __name__ == '__main__':
     init_app()
+    get_data()
     
     try:
         app.run(host="0.0.0.0", port=8080, threaded=True, debug=False)
