@@ -5,3 +5,4 @@ gunicorn==21.2.0
 dnspython==2.4.2
 PyMySQL
 cryptography
+google-cloud-pubsub

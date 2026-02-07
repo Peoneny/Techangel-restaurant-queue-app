@@ -14,7 +14,7 @@ import queue as thread_queue
 import secrets
 import hashlib
 import pymysql
-
+from google.cloud import pubsub_v1
 # ============================================================================
 # CONFIGURATION & SETUP
 # ============================================================================
@@ -290,19 +290,17 @@ class PubSubEvent(Enum):
     SCHEDULER_CLEARED = "scheduler_cleared"
 
 class PubSubSystem:
-    """Simple pub/sub system for real-time notifications"""
+    """GCP Pub/Sub system for real-time notifications"""
     def __init__(self):
-        self.subscribers = {}
-        self.lock = Lock()
-    
-    def subscribe(self, event_type: PubSubEvent):
-        subscriber_queue = thread_queue.Queue(maxsize=50)
-        with self.lock:
-            if event_type not in self.subscribers:
-                self.subscribers[event_type] = []
-            self.subscribers[event_type].append(subscriber_queue)
-        return subscriber_queue
-    
+        # 1. ระบุค่าจาก GCP (แนะนำให้ใช้ Environment Variables)
+        self.project_id = os.getenv('GCP_PROJECT_ID', 'techangel')
+        self.topic_id = os.getenv('GCP_TOPIC_ID', 'queue-topic')
+        
+        # 2. สร้าง Publisher Client
+        self.publisher = pubsub_v1.PublisherClient()
+        self.topic_path = self.publisher.topic_path(self.project_id, self.topic_id)
+        self.lock = Lock() # เก็บไว้เผื่อใช้จัดการสถานะภายในอื่นๆ
+
     def publish(self, event_type: PubSubEvent, data: dict):
         event_data = {
             'event': event_type.value,
@@ -310,20 +308,20 @@ class PubSubSystem:
             'timestamp': datetime.now().isoformat()
         }
         
-        with self.lock:
-            if event_type in self.subscribers:
-                dead_queues = []
-                for subscriber_queue in self.subscribers[event_type]:
-                    try:
-                        subscriber_queue.put_nowait(event_data)
-                    except thread_queue.Full:
-                        dead_queues.append(subscriber_queue)
-                
-                for dead_queue in dead_queues:
-                    self.subscribers[event_type].remove(dead_queue)
+        # แปลงข้อมูลเป็น JSON และ Bytes
+        message_json = json.dumps(event_data)
+        message_bytes = message_json.encode("utf-8")
         
-        logger.info(f"Published event: {event_type.value}")
+        try:
+            # 3. ส่งข้อมูลไปที่ GCP Pub/Sub
+            future = self.publisher.publish(self.topic_path, message_bytes)
+            # future.result() จะรอจนกว่าจะส่งสำเร็จ
+            logger.info(f"Published to GCP: {event_type.value} (ID: {future.result()})")
+        except Exception as e:
+            logger.error(f"Failed to publish to GCP: {str(e)}")
 
+    def subscribe(self, event_type: PubSubEvent):
+        pass
 pubsub = PubSubSystem()
 
 # ============================================================================
@@ -989,32 +987,6 @@ def clear_queue():
         "message": "ล้างคิวเรียบร้อย",
         "cleared": cleared_count
     })
-
-@app.route('/events')
-@login_required
-def events():
-    """Server-Sent Events endpoint for real-time updates"""
-    def event_stream():
-        queues = [
-            pubsub.subscribe(PubSubEvent.QUEUE_ADDED),
-            pubsub.subscribe(PubSubEvent.QUEUE_CALLED),
-            pubsub.subscribe(PubSubEvent.QUEUE_CLEARED),
-            pubsub.subscribe(PubSubEvent.QUEUE_EXPIRED),
-            pubsub.subscribe(PubSubEvent.SCHEDULER_CLEARED)
-        ]
-        
-        try:
-            while True:
-                for q in queues:
-                    try:
-                        event = q.get(timeout=1)
-                        yield f"data: {json.dumps(event)}\n\n"
-                    except thread_queue.Empty:
-                        continue
-        except GeneratorExit:
-            logger.info("Client disconnected from event stream")
-    
-    return Response(event_stream(), mimetype='text/event-stream')
 
 @app.route('/health', methods=['GET'])
 def health_check():
