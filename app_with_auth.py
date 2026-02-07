@@ -14,6 +14,7 @@ import queue as thread_queue
 import secrets
 import hashlib
 import pymysql
+import uuid
 
 # ============================================================================
 # CONFIGURATION & SETUP
@@ -1095,7 +1096,10 @@ def init_app():
     logger.info(f"SCHEDULER TOKEN: {SCHEDULER_TOKEN}")
     logger.info("=" * 60)
 
-# database test
+# ============================================================================
+# database connecting
+# ============================================================================
+
 def get_db_connection():
     # 1. ดึงค่าจาก Environment Variables ที่เราตั้งไว้ใน Cloud Run
     db_user = os.environ.get('DB_USER')
@@ -1129,6 +1133,35 @@ def get_data():
             cursor.execute("SELECT NOW() as now;") # ทดสอบดึงเวลาปัจจุบันจาก DB
             result = cursor.fetchone()
             print(f"Connected! Database time: {result['now']}")
+        db.close()
+
+@app.route('/add-queue', methods=['POST'])
+def add_queue():
+    name = request.form.get('name')
+    phone = request.form.get('phone')
+    notes = request.form.get('notes')
+    
+    db = get_db_connection()
+    try:
+        with db.cursor() as cursor:
+            # 1. หาตำแหน่งคิวล่าสุด (เอา position ล่าสุด + 1)
+            cursor.execute("SELECT MAX(position) as max_pos FROM queue_entries WHERE status = 'waiting'")
+            result = cursor.fetchone()
+            next_position = (result['max_pos'] or 0) + 1
+            
+            # 2. บันทึกลงตาราง queue_entries
+            sql = """
+                INSERT INTO queue_entries (queue_id, name, phone, notes, position, status)
+                VALUES (%s, %s, %s, %s, %s, 'waiting')
+            """
+            new_id = str(uuid.uuid4())
+            cursor.execute(sql, (new_id, name, phone, notes, next_position))
+            
+        db.commit()
+        return {"status": "success", "queue_id": new_id, "position": next_position}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}, 500
+    finally:
         db.close()
 
 
