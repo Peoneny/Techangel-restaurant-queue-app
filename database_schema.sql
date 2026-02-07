@@ -3,9 +3,9 @@
 -- ============================================================================
 
 -- สร้าง Database (ถ้ายังไม่มี)
-CREATE DATABASE IF NOT EXISTS your_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE DATABASE IF NOT EXISTS techangel_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
-USE your_db;
+USE techangel_db;
 
 -- ============================================================================
 -- Table: users
