@@ -14,7 +14,9 @@ import queue as thread_queue
 import secrets
 import hashlib
 import pymysql
+import uuid
 from google.cloud import pubsub_v1
+
 # ============================================================================
 # CONFIGURATION & SETUP
 # ============================================================================
@@ -290,38 +292,41 @@ class PubSubEvent(Enum):
     SCHEDULER_CLEARED = "scheduler_cleared"
 
 class PubSubSystem:
-    """GCP Pub/Sub system for real-time notifications"""
+    """ระบบ Pub/Sub ที่เชื่อมต่อกับ Google Cloud โดยตรง"""
     def __init__(self):
-        # 1. ระบุค่าจาก GCP (แนะนำให้ใช้ Environment Variables)
-        self.project_id = os.getenv('GCP_PROJECT_ID', 'techangel')
-        self.topic_id = os.getenv('GCP_TOPIC_ID', 'queue-topic')
+        # ดึงค่าจาก Environment Variables (ต้องไปตั้งค่าใน Cloud Run หรือ OS)
+        self.project_id = os.getenv('GCP_PROJECT_ID')
+        self.topic_id = os.getenv('GCP_TOPIC_ID')
         
-        # 2. สร้าง Publisher Client
+        # สร้างตัวส่งข้อมูลไป GCP
+        from google.cloud import pubsub_v1
         self.publisher = pubsub_v1.PublisherClient()
         self.topic_path = self.publisher.topic_path(self.project_id, self.topic_id)
-        self.lock = Lock() # เก็บไว้เผื่อใช้จัดการสถานะภายในอื่นๆ
 
     def publish(self, event_type: PubSubEvent, data: dict):
+        """ฟังก์ชันเดิมที่เคยใช้ แต่เปลี่ยนการทำงานภายในให้ส่งขึ้น Cloud"""
         event_data = {
             'event': event_type.value,
             'data': data,
             'timestamp': datetime.now().isoformat()
         }
         
-        # แปลงข้อมูลเป็น JSON และ Bytes
+        # เตรียมข้อมูล
         message_json = json.dumps(event_data)
         message_bytes = message_json.encode("utf-8")
         
         try:
-            # 3. ส่งข้อมูลไปที่ GCP Pub/Sub
+            # ยิงขึ้น GCP Pub/Sub
             future = self.publisher.publish(self.topic_path, message_bytes)
-            # future.result() จะรอจนกว่าจะส่งสำเร็จ
-            logger.info(f"Published to GCP: {event_type.value} (ID: {future.result()})")
+            logger.info(f"GCP Pub/Sub Sent: {event_type.value} (ID: {future.result()})")
         except Exception as e:
-            logger.error(f"Failed to publish to GCP: {str(e)}")
+            logger.error(f"GCP Pub/Sub Error: {str(e)}")
 
     def subscribe(self, event_type: PubSubEvent):
-        pass
+        # ในระบบ Cloud จะไม่ใช้ subscribe() แบบสร้าง Queue ใน Memory แล้ว
+        # จึงปล่อยว่างไว้เพื่อไม่ให้โค้ดส่วนอื่นที่เรียกฟังก์ชันนี้พัง
+        return thread_queue.Queue()
+
 pubsub = PubSubSystem()
 
 # ============================================================================
@@ -1067,7 +1072,10 @@ def init_app():
     logger.info(f"SCHEDULER TOKEN: {SCHEDULER_TOKEN}")
     logger.info("=" * 60)
 
-# database test
+# ============================================================================
+# database connecting
+# ============================================================================
+
 def get_db_connection():
     # 1. ดึงค่าจาก Environment Variables ที่เราตั้งไว้ใน Cloud Run
     db_user = os.environ.get('DB_USER')
@@ -1101,6 +1109,35 @@ def get_data():
             cursor.execute("SELECT NOW() as now;") # ทดสอบดึงเวลาปัจจุบันจาก DB
             result = cursor.fetchone()
             print(f"Connected! Database time: {result['now']}")
+        db.close()
+
+@app.route('/add-queue', methods=['POST'])
+def add_queue():
+    name = request.form.get('name')
+    phone = request.form.get('phone')
+    notes = request.form.get('notes')
+    
+    db = get_db_connection()
+    try:
+        with db.cursor() as cursor:
+            # 1. หาตำแหน่งคิวล่าสุด (เอา position ล่าสุด + 1)
+            cursor.execute("SELECT MAX(position) as max_pos FROM queue_entries WHERE status = 'waiting'")
+            result = cursor.fetchone()
+            next_position = (result['max_pos'] or 0) + 1
+            
+            # 2. บันทึกลงตาราง queue_entries
+            sql = """
+                INSERT INTO queue_entries (queue_id, name, phone, notes, position, status)
+                VALUES (%s, %s, %s, %s, %s, 'waiting')
+            """
+            new_id = str(uuid.uuid4())
+            cursor.execute(sql, (new_id, name, phone, notes, next_position))
+            
+        db.commit()
+        return {"status": "success", "queue_id": new_id, "position": next_position}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}, 500
+    finally:
         db.close()
 
 
