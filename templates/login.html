@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -24,7 +25,7 @@
         .login-container {
             background: white;
             border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
             padding: 40px;
             max-width: 400px;
             width: 100%;
@@ -165,9 +166,19 @@
         }
 
         @keyframes shake {
-            0%, 100% { transform: translateX(0); }
-            25% { transform: translateX(-10px); }
-            75% { transform: translateX(10px); }
+
+            0%,
+            100% {
+                transform: translateX(0);
+            }
+
+            25% {
+                transform: translateX(-10px);
+            }
+
+            75% {
+                transform: translateX(10px);
+            }
         }
 
         .shake {
@@ -175,6 +186,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="login-container">
         <div class="logo">
@@ -197,7 +209,13 @@
         </form>
 
         <div id="message" class="message"></div>
-
+        <div style="text-align: center; margin-top: 20px; font-size: 14px; color: #666;">
+            ยังไม่มีบัญชี?
+            <a href="/signup-page"
+                style="color: #667eea; font-weight: 600; text-decoration: none; border-bottom: 1px solid transparent; transition: border-color 0.3s;">
+                สมัครสมาชิกที่นี่
+            </a>
+        </div>
     </div>
 
     <script>
@@ -278,4 +296,5 @@
         }
     </script>
 </body>
+
 </html>

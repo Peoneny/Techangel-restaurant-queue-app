@@ -327,7 +327,7 @@ class PubSubSystem:
         # จึงปล่อยว่างไว้เพื่อไม่ให้โค้ดส่วนอื่นที่เรียกฟังก์ชันนี้พัง
         return thread_queue.Queue()
 
-pubsub = PubSubSystem()
+# pubsub = PubSubSystem()
 
 # ============================================================================
 # SCHEDULER LOGS
@@ -534,13 +534,10 @@ def handle_errors(f):
 
 @app.route('/')
 def home():
-    """Redirect to appropriate page based on login status"""
+    """Redirect โดยเช็คจาก session role ที่เราเก็บไว้ตอน login"""
     if 'username' in session:
-        username = session['username']
-        with users_lock:
-            user = users_db.get(username)
-        
-        if user and user.role == UserRole.ADMIN:
+        role = session.get('role')
+        if role == 'admin':
             return redirect(url_for('admin_dashboard'))
         else:
             return redirect(url_for('user_dashboard'))
@@ -550,41 +547,43 @@ def home():
 @app.route('/login', methods=['POST'])
 @handle_errors
 def login():
-    """Login endpoint"""
+    """Login โดยเช็คจากตาราง users ใน Cloud SQL"""
     data = request.json
-    if not data:
-        raise QueueException("Request body is required", ErrorCode.INVALID_REQUEST)
-    
     username = data.get('username', '').strip()
     password = data.get('password', '')
     
     if not username or not password:
-        raise QueueException("Username and password required", ErrorCode.VALIDATION_ERROR)
+        raise QueueException("กรุณากรอกข้อมูลให้ครบถ้วน", ErrorCode.VALIDATION_ERROR)
     
-    with users_lock:
-        user = users_db.get(username)
-    
-    if not user or not user.check_password(password):
-        logger.warning(f"Failed login attempt for username: {username}")
-        raise QueueException(
-            "Invalid username or password",
-            ErrorCode.INVALID_CREDENTIALS,
-            401
-        )
-    
-    # Set session
-    session.permanent = True
-    session['username'] = user.username
-    session['role'] = user.role.value
-    
-    logger.info(f"User {username} logged in successfully")
-    
-    return jsonify({
-        'success': True,
-        'user': user.to_dict(),
-        'redirect': '/admin' if user.role == UserRole.ADMIN else '/user'
-    })
-
+    db = get_db_connection()
+    try:
+        with db.cursor() as cursor:
+            cursor.execute("SELECT * FROM users WHERE username = %s AND is_active = TRUE", (username,))
+            user_data = cursor.fetchone()
+            
+            if user_data:
+                # นำรหัสที่กรอกมา Hash แล้วเทียบกับค่าใน Database
+                pw_hash = hashlib.sha256(password.encode()).hexdigest()
+                if user_data['password_hash'] == pw_hash:
+                    # อัปเดตเวลาใช้งานล่าสุด
+                    cursor.execute("UPDATE users SET last_login = NOW() WHERE id = %s", (user_data['id'],))
+                    db.commit()
+                    
+                    # เก็บข้อมูลใน Session
+                    session.permanent = True
+                    session['username'] = user_data['username']
+                    session['role'] = user_data['role']
+                    
+                    return jsonify({
+                        'success': True,
+                        'user': {'username': user_data['username'], 'role': user_data['role']},
+                        'redirect': '/admin' if user_data['role'] == 'admin' else '/user'
+                    })
+        
+        raise QueueException("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง", ErrorCode.INVALID_CREDENTIALS, 401)
+    finally:
+        if db: db.close()
+            
 @app.route('/logout', methods=['POST'])
 def logout():
     """Logout endpoint"""
@@ -599,20 +598,70 @@ def logout():
 
 @app.route('/check-auth')
 def check_auth():
-    """Check authentication status"""
+    """Check authentication status จาก session"""
     if 'username' in session:
-        username = session['username']
-        with users_lock:
-            user = users_db.get(username)
-        
-        if user:
-            return jsonify({
-                'authenticated': True,
-                'user': user.to_dict()
-            })
-    
+        return jsonify({
+            'authenticated': True,
+            'user': {
+                'username': session['username'],
+                'role': session.get('role')
+            }
+        })
     return jsonify({'authenticated': False}), 401
 
+@app.route('/signup', methods=['POST'])
+@handle_errors
+def signup():
+    """ลงทะเบียนผู้ใช้ใหม่และบันทึกลง Cloud SQL"""
+    data = request.json
+    if not data:
+        raise QueueException("ต้องกรอกข้อมูลให้ครบถ้วน", ErrorCode.INVALID_REQUEST)
+    
+    username = data.get('username', '').strip()
+    password = data.get('password', '')
+    
+    if not username or not password:
+        raise QueueException("กรุณากรอกชื่อผู้ใช้และรหัสผ่าน", ErrorCode.VALIDATION_ERROR)
+    
+    if len(password) < 6:
+        raise QueueException("รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร", ErrorCode.VALIDATION_ERROR)
+
+    db = get_db_connection()
+    if not db:
+        raise QueueException("เชื่อมต่อฐานข้อมูลล้มเหลว", ErrorCode.INTERNAL_ERROR, 500)
+
+    try:
+        with db.cursor() as cursor:
+            # 1. ตรวจสอบว่ามีชื่อผู้ใช้นี้อยู่แล้วหรือไม่
+            cursor.execute("SELECT id FROM users WHERE username = %s", (username,))
+            if cursor.fetchone():
+                raise QueueException("ชื่อผู้ใช้นี้ถูกใช้งานแล้ว", ErrorCode.VALIDATION_ERROR)
+            
+            # 2. Hash รหัสผ่านก่อนบันทึก (SHA-256)
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+            
+            # 3. บันทึกข้อมูลลงตาราง users
+            sql = "INSERT INTO users (username, password_hash, role, is_active) VALUES (%s, %s, 'user', 1)"
+            cursor.execute(sql, (username, password_hash))
+            
+        db.commit()
+        logger.info(f"User {username} signed up successfully")
+        return jsonify({"success": True, "message": "ลงทะเบียนสำเร็จ กรุณาเข้าสู่ระบบ"})
+    
+    except QueueException:
+        raise # ส่ง Exception ต่อไปที่ Error Handler
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Signup error: {e}")
+        return jsonify({"success": False, "error": "เกิดข้อผิดพลาดในการลงทะเบียน"}), 500
+    finally:
+        if db:
+            db.close()
+            
+@app.route('/signup-page')
+def signup_page():
+    """หน้าเพจสำหรับสมัครสมาชิก"""
+    return render_template('signup.html')
 # ============================================================================
 # DASHBOARD ROUTES
 # ============================================================================
@@ -906,20 +955,39 @@ def reserve():
 @handle_errors
 @login_required
 def show_queue():
-    """Get current queue status (All users)"""
-    with lock:
-        queue_list = [
-            entry.to_dict() if isinstance(entry, QueueEntry) else entry
-            for entry in queue
-        ]
-    
-    return jsonify({
-        "success": True,
-        "queue": queue_list,
-        "total": len(queue_list),
-        "capacity": MAX_QUEUE_SIZE,
-        "available_slots": MAX_QUEUE_SIZE - len(queue_list)
-    })
+    """ดึงข้อมูลคิวปัจจุบันจาก Cloud SQL"""
+    db = get_db_connection()
+    if not db:
+        return jsonify({"success": False, "error": "Database connection failed"}), 500
+        
+    try:
+        with db.cursor() as cursor:
+            # ดึงเฉพาะคิวที่สถานะเป็น 'waiting' เรียงตามลำดับ position
+            sql = "SELECT * FROM queue_entries WHERE status = 'waiting' ORDER BY position ASC"
+            cursor.execute(sql)
+            rows = cursor.fetchall()
+            
+            queue_list = []
+            for row in rows:
+                queue_list.append({
+                    "id": row['id'],
+                    "name": row['name'],
+                    "phone": row['phone'],
+                    "party_size": row['notes'], # แสดงข้อมูล party_size จาก notes ที่คุณเก็บไว้
+                    "created_by": row['created_by'],
+                    "timestamp": row['created_at'].isoformat()
+                })
+                
+        return jsonify({
+            "success": True,
+            "queue": queue_list,
+            "total": len(queue_list),
+            "capacity": MAX_QUEUE_SIZE,
+            "available_slots": MAX_QUEUE_SIZE - len(queue_list)
+        })
+    finally:
+        if db:
+            db.close()
 
 @app.route('/next', methods=['POST'])
 @handle_errors

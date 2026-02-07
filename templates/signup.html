@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>สมัครสมาชิก - ระบบจองคิวร้านอาหาร</title>
+    <style>
+        /* ใช้ Style เดียวกับหน้า Login เพื่อความต่อเนื่อง */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+        }
+        .container {
+            background: white; border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 40px; max-width: 400px; width: 100%;
+        }
+        .logo { text-align: center; margin-bottom: 30px; }
+        .logo h1 { color: #667eea; font-size: 2em; margin-bottom: 10px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; color: #333; font-weight: 600; }
+        input {
+            width: 100%; padding: 12px 15px; border: 2px solid #e0e0e0;
+            border-radius: 8px; font-size: 16px; transition: border-color 0.3s;
+        }
+        input:focus { outline: none; border-color: #667eea; }
+        button {
+            width: 100%; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; padding: 14px; border: none; border-radius: 8px;
+            font-size: 16px; font-weight: 600; cursor: pointer;
+            transition: transform 0.2s; margin-top: 10px;
+        }
+        button:hover { transform: translateY(-2px); box-shadow: 0 5px 20px rgba(102, 126, 234, 0.4); }
+        .message { margin-top: 15px; padding: 12px; border-radius: 8px; font-size: 14px; display: none; }
+        .error { background: #fee; color: #c33; border: 1px solid #fcc; }
+        .success { background: #efe; color: #3c3; border: 1px solid #cfc; }
+        .footer-link { text-align: center; margin-top: 20px; font-size: 14px; color: #666; }
+        .footer-link a { color: #667eea; font-weight: 600; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="logo">
+            <h1>📝 สมัครสมาชิก</h1>
+            <p>สร้างบัญชีใหม่เพื่อจองคิว</p>
+        </div>
+
+        <form id="signupForm">
+            <div class="form-group">
+                <label for="username">ชื่อผู้ใช้</label>
+                <input type="text" id="username" placeholder="กรอกชื่อผู้ใช้" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label for="password">รหัสผ่าน</label>
+                <input type="password" id="id_password" placeholder="อย่างน้อย 6 ตัวอักษร" required>
+            </div>
+
+            <div class="form-group">
+                <label for="confirmPassword">ยืนยันรหัสผ่าน</label>
+                <input type="password" id="confirmPassword" placeholder="กรอกรหัสผ่านอีกครั้ง" required>
+            </div>
+
+            <button type="submit" id="signupBtn">ลงทะเบียน</button>
+        </form>
+
+        <div id="message" class="message"></div>
+
+        <div class="footer-link">
+            มีบัญชีอยู่แล้ว? <a href="/">เข้าสู่ระบบที่นี่</a>
+        </div>
+    </div>
+
+    <script>
+        const signupForm = document.getElementById('signupForm');
+        const signupBtn = document.getElementById('signupBtn');
+        const messageDiv = document.getElementById('message');
+
+        signupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('id_password').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            // ตรวจสอบเบื้องต้นที่หน้าบ้าน
+            if (password !== confirmPassword) {
+                showMessage('รหัสผ่านไม่ตรงกัน', 'error');
+                return;
+            }
+
+            if (password.length < 6) {
+                showMessage('รหัสผ่านต้องมีความยาวอย่างน้อย 6 ตัวอักษร', 'error');
+                return;
+            }
+
+            signupBtn.disabled = true;
+            signupBtn.textContent = 'กำลังลงทะเบียน...';
+
+            try {
+                const response = await fetch('/signup', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    showMessage('✅ ' + data.message, 'success');
+                    setTimeout(() => {
+                        window.location.href = '/'; // สมัครเสร็จส่งไปหน้า Login
+                    }, 2000);
+                } else {
+                    showMessage('❌ ' + (data.error || 'สมัครสมาชิกไม่สำเร็จ'), 'error');
+                    signupBtn.disabled = false;
+                    signupBtn.textContent = 'ลงทะเบียน';
+                }
+            } catch (error) {
+                showMessage('❌ เกิดข้อผิดพลาดในการเชื่อมต่อ', 'error');
+                signupBtn.disabled = false;
+                signupBtn.textContent = 'ลงทะเบียน';
+            }
+        });
+
+        function showMessage(text, type) {
+            messageDiv.textContent = text;
+            messageDiv.className = `message ${type}`;
+            messageDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
