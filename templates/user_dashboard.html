@@ -375,38 +375,51 @@
             }
         }
 
-        async function reserve() {
+       async function reserve() {
             const name = document.getElementById('name').value;
             const phone = document.getElementById('phone').value;
-            const partySize = parseInt(document.getElementById('partySize').value);
+            const partySize = document.getElementById('partySize').value;
 
+            // ตรวจสอบค่าว่างตาม Logic ของคุณ
             if (!name.trim()) {
                 showResult('กรุณากรอกชื่อ', 'error');
                 return;
             }
 
             try {
-                const response = await fetch('/reserve', {
+                // 1. ใช้ FormData เพื่อให้ตรงกับ request.form.get ในไฟล์ Python ของคุณ
+                const formData = new FormData();
+                formData.append('name', name);
+                formData.append('phone', phone);
+                formData.append('notes', `จำนวน ${partySize} คน`); // ส่งจำนวนคนเข้าฟิลด์ notes ตามโครงสร้าง DB
+
+                // 2. เปลี่ยน Endpoint ไปที่ /add-queue ตามที่คุณสร้างไว้
+                const response = await fetch('/add-queue', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, phone, party_size: partySize })
+                    body: formData // ส่งแบบ Form (ไม่ใช่ JSON)
                 });
 
                 const data = await response.json();
 
-                if (response.ok && data.success) {
+                // 3. ตรวจสอบเงื่อนไขตามที่ /add-queue ส่งกลับมา (status: success)
+                if (response.ok && data.status === "success") {
                     showResult(
-                        `✅ ${data.message}<br>รหัสคิว: #${data.entry.id}<br>เวลารอประมาณ: ${data.estimated_wait_minutes} นาที`,
+                        `✅ จองคิวสำเร็จ!<br>รหัสคิว: #${data.queue_id}<br>คุณอยู่ลำดับที่: ${data.position}`,
                         'success'
                     );
+                    
+                    // ล้างค่าในฟอร์ม
                     document.getElementById('name').value = '';
                     document.getElementById('phone').value = '';
+                    
+                    // สั่งรีเฟรชรายการคิวข้างล่าง
                     refreshQueue();
                 } else {
-                    showResult(`❌ ${data.error || 'เกิดข้อผิดพลาด'}`, 'error');
+                    showResult(`❌ ${data.message || 'เกิดข้อผิดพลาด'}`, 'error');
                 }
             } catch (error) {
-                showResult('❌ ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์', 'error');
+                showResult('❌ ไม่สามารถเชื่อมต่อกับฐานข้อมูลได้', 'error');
+                console.error('Error:', error);
             }
         }
 
