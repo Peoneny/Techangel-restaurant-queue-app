@@ -34,6 +34,7 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
 # ============================================================================
 # USER MANAGEMENT
 # ============================================================================
@@ -91,7 +92,7 @@ def init_default_users():
         )
     
     logger.info("Default users initialized (admin/admin123, user/user123)")
-    
+
 # ============================================================================
 # AUTHENTICATION DECORATORS
 # ============================================================================
@@ -326,7 +327,7 @@ class PubSubSystem:
         # จึงปล่อยว่างไว้เพื่อไม่ให้โค้ดส่วนอื่นที่เรียกฟังก์ชันนี้พัง
         return thread_queue.Queue()
 
- pubsub = PubSubSystem()
+# pubsub = PubSubSystem()
 
 # ============================================================================
 # SCHEDULER LOGS
@@ -993,118 +994,72 @@ def show_queue():
 @admin_required
 @circuit_breaker.call
 def next_queue():
-    """เรียกคิวถัดไปจาก Cloud SQL (Admin เท่านั้น)"""
-    db = get_db_connection()
-    if not db:
-        return jsonify({"success": False, "message": "Database connection failed"}), 500
+    """Call next person in queue (Admin only)"""
+    with lock:
+        if not queue:
+            return jsonify({
+                "success": True,
+                "called": None,
+                "message": "ไม่มีคนในคิว",
+                "remaining": 0
+            })
+        
+        called = queue.popleft()
+        called_dict = called.to_dict() if isinstance(called, QueueEntry) else called
+        
+        logger.info(f"Called: {called_dict.get('name')} by {session.get('username')}")
+        
+        with history_lock:
+            history.append({
+                **called_dict,
+                'called_at': datetime.now().isoformat(),
+                'called_by': session.get('username')
+            })
+        
+        remaining = len(queue)
     
-    try:
-        with db.cursor() as cursor:
-            # 1. หาคิวที่สถานะเป็น 'waiting' ที่ลำดับน้อยที่สุด (มาก่อน)
-            cursor.execute("""
-                SELECT * FROM queue_entries 
-                WHERE status = 'waiting' 
-                ORDER BY position ASC LIMIT 1
-            """)
-            called = cursor.fetchone()
-            
-            if not called:
-                return jsonify({
-                    "success": True,
-                    "called": None,
-                    "message": "ไม่มีคนในคิว",
-                    "remaining": 0
-                })
+    pubsub.publish(PubSubEvent.QUEUE_CALLED, called_dict)
+    
+    return jsonify({
+        "success": True,
+        "called": called_dict,
+        "remaining": remaining,
+        "message": f"เรียก: {called_dict.get('name')}"
+    })
 
-            # 2. อัปเดตสถานะคิวในตารางหลักเป็น 'called'
-            cursor.execute("UPDATE queue_entries SET status = 'called' WHERE id = %s", (called['id'],))
-            
-            # 3. บันทึกลงตารางประวัติ (queue_history) เพื่อให้หน้า Admin ดึงไปโชว์ได้
-            history_sql = """
-                INSERT INTO queue_history (queue_id, name, phone, notes, created_at, called_by)
-                VALUES (%s, %s, %s, %s, %s, %s)
-            """
-            cursor.execute(history_sql, (
-                called['queue_id'], called['name'], called['phone'], 
-                called['notes'], called['created_at'], session.get('username')
-            ))
-            
-            db.commit() # ยืนยันการเปลี่ยนแปลงข้อมูล
-            
-            # 4. นับจำนวนคิวที่เหลือรออยู่
-            cursor.execute("SELECT COUNT(*) as remaining FROM queue_entries WHERE status = 'waiting'")
-            remaining = cursor.fetchone()['remaining']
-
-        # เตรียมข้อมูลเพื่อส่ง Event แจ้งเตือนหน้าจอแบบ Real-time
-        called_dict = {
-            "id": called['id'],
-            "name": called['name'],
-            "party_size": called['notes'], # Mapping notes มาเป็น party_size ให้ตรงกับ Frontend
-            "phone": called['phone'],
-            "created_by": called['created_by']
-        }
-        
-        # ส่งแจ้งเตือนผ่าน Pub/Sub (ถ้าเปิดใช้งาน)
-        if 'pubsub' in globals():
-            pubsub.publish(PubSubEvent.QUEUE_CALLED, called_dict)
-        
-        logger.info(f"Called: {called['name']} from SQL by {session.get('username')}")
-        
-        return jsonify({
-            "success": True,
-            "called": called_dict,
-            "remaining": remaining,
-            "message": f"เรียก: {called['name']}"
-        })
-    except Exception as e:
-        if db: db.rollback()
-        logger.error(f"Error in next_queue: {str(e)}")
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        if db: db.close()
-        
 @app.route('/history', methods=['GET'])
 @handle_errors
 @login_required
 def show_history():
-    limit = request.args.get('limit', 10, type=int)
-    db = get_db_connection()
-    try:
-        with db.cursor() as cursor:
-            # ดึงประวัติล่าสุดตามจำนวน limit
-            cursor.execute("SELECT * FROM queue_history ORDER BY called_at DESC LIMIT %s", (limit,))
-            rows = cursor.fetchall()
-            
-            # ดึงจำนวนที่ให้บริการทั้งหมดวันนี้
-            cursor.execute("SELECT COUNT(*) as total FROM queue_history WHERE DATE(called_at) = CURDATE()")
-            total_today = cursor.fetchone()['total']
-            
-            history_list = []
-            for row in rows:
-                history_list.append({
-                    "name": row['name'],
-                    "party_size": row['notes'],
-                    "called_at": row['called_at'].isoformat(),
-                    "called_by": row['called_by']
-                })
-        return jsonify({"success": True, "history": history_list, "total": total_today})
-    finally:
-        if db: db.close()
+    """Get queue history (All users)"""
+    limit = request.args.get('limit', 50, type=int)
+    
+    with history_lock:
+        history_list = list(history)[-limit:]
+    
+    return jsonify({
+        "success": True,
+        "history": history_list,
+        "total": len(history_list)
+    })
 
 @app.route('/clear', methods=['POST'])
 @handle_errors
 @admin_required
 def clear_queue():
-    db = get_db_connection()
-    try:
-        with db.cursor() as cursor:
-            # เปลี่ยนสถานะคิวที่รออยู่ทั้งหมดเป็น 'cancelled'
-            cursor.execute("UPDATE queue_entries SET status = 'cancelled' WHERE status = 'waiting'")
-            cleared_count = cursor.rowcount
-        db.commit()
-        return jsonify({"success": True, "cleared": cleared_count})
-    finally:
-        if db: db.close()
+    """Clear the entire queue (Admin only)"""
+    with lock:
+        cleared_count = len(queue)
+        queue.clear()
+        logger.info(f"Cleared {cleared_count} items from queue by {session.get('username')}")
+    
+    pubsub.publish(PubSubEvent.QUEUE_CLEARED, {"cleared_count": cleared_count})
+    
+    return jsonify({
+        "success": True,
+        "message": "ล้างคิวเรียบร้อย",
+        "cleared": cleared_count
+    })
 
 @app.route('/health', methods=['GET'])
 def health_check():
@@ -1256,7 +1211,7 @@ def add_queue():
 
 if __name__ == '__main__':
     init_app()
-    # get_data()
+    get_data()
     
     try:
         app.run(host="0.0.0.0", port=8080, threaded=True, debug=False)
