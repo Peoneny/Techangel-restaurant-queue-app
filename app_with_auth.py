@@ -269,7 +269,7 @@ class PubSubSystem:
         # จึงปล่อยว่างไว้เพื่อไม่ให้โค้ดส่วนอื่นที่เรียกฟังก์ชันนี้พัง
         return thread_queue.Queue()
 
- pubsub = PubSubSystem()
+ # pubsub = PubSubSystem()
 
 # ============================================================================
 # SCHEDULER LOGS
