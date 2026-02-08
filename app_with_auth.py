@@ -1256,7 +1256,7 @@ def add_queue():
 
 if __name__ == '__main__':
     init_app()
-    get_data()
+    # get_data()
     
     try:
         app.run(host="0.0.0.0", port=8080, threaded=True, debug=False)
