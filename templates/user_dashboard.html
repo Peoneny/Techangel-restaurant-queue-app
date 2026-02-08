@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="th">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -31,7 +32,7 @@
             padding: 20px 30px;
             border-radius: 15px;
             margin-bottom: 20px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
         }
 
         .header h1 {
@@ -73,7 +74,7 @@
             border-radius: 15px;
             padding: 25px;
             margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
         }
 
         .card h2 {
@@ -94,7 +95,8 @@
             font-weight: 600;
         }
 
-        input, select {
+        input,
+        select {
             width: 100%;
             padding: 12px;
             border: 2px solid #e0e0e0;
@@ -103,7 +105,8 @@
             transition: border-color 0.3s;
         }
 
-        input:focus, select:focus {
+        input:focus,
+        select:focus {
             outline: none;
             border-color: #667eea;
         }
@@ -238,7 +241,7 @@
             background: white;
             padding: 15px 20px;
             border-radius: 8px;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.3);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
             z-index: 1000;
             max-width: 300px;
             animation: slideIn 0.3s ease-out;
@@ -249,6 +252,7 @@
                 transform: translateX(400px);
                 opacity: 0;
             }
+
             to {
                 transform: translateX(0);
                 opacity: 1;
@@ -267,6 +271,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <div class="header">
@@ -302,7 +307,8 @@
             </div>
             <div class="input-group">
                 <label for="phone">เบอร์โทรศัพท์</label>
-                <input type="tel" id="phone" placeholder="08X-XXX-XXXX">
+                <input type="text" id="phone" placeholder="08XXXXXXXX" maxlength="10" inputmode="numeric"
+                    oninput="this.value = this.value.replace(/[^0-9]/g, '')">
             </div>
             <div class="input-group">
                 <label for="partySize">จำนวนคน *</label>
@@ -375,7 +381,7 @@
             }
         }
 
-       async function reserve() {
+        async function reserve() {
             const name = document.getElementById('name').value;
             const phone = document.getElementById('phone').value;
             const partySize = document.getElementById('partySize').value;
@@ -407,11 +413,11 @@
                         `✅ จองคิวสำเร็จ!<br>รหัสคิว: #${data.queue_id}<br>คุณอยู่ลำดับที่: ${data.position}`,
                         'success'
                     );
-                    
+
                     // ล้างค่าในฟอร์ม
                     document.getElementById('name').value = '';
                     document.getElementById('phone').value = '';
-                    
+
                     // สั่งรีเฟรชรายการคิวข้างล่าง
                     refreshQueue();
                 } else {
@@ -478,7 +484,7 @@
 
         function initEventStream() {
             eventSource = new EventSource('/events');
-            
+
             eventSource.onmessage = (event) => {
                 const data = JSON.parse(event.data);
                 handleRealtimeEvent(data);
@@ -492,7 +498,7 @@
         function handleRealtimeEvent(event) {
             console.log('Realtime event:', event);
 
-            switch(event.event) {
+            switch (event.event) {
                 case 'queue_added':
                     showNotification(`${event.data.name} เข้าคิวแล้ว`, 'info');
                     refreshQueue();
@@ -537,4 +543,5 @@
         }
     </script>
 </body>
+
 </html>
