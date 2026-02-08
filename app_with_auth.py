@@ -1212,30 +1212,33 @@ def add_queue():
     name = request.form.get('name')
     phone = request.form.get('phone')
     notes = request.form.get('notes')
-    
+    # 1. ต้องดึง username จาก session มาด้วยเพื่อให้ระบบรู้ว่าใครจอง
+    username = session.get('username') 
+
     db = get_db_connection()
     try:
         with db.cursor() as cursor:
-            # 1. หาตำแหน่งคิวล่าสุด (เอา position ล่าสุด + 1)
+            # 2. คำนวณลำดับคิวถัดไป
             cursor.execute("SELECT MAX(position) as max_pos FROM queue_entries WHERE status = 'waiting'")
             result = cursor.fetchone()
             next_position = (result['max_pos'] or 0) + 1
             
-            # 2. บันทึกลงตาราง queue_entries
+            # 3. เพิ่ม created_by ลงในคำสั่ง SQL เพื่อผูกคิวกับชื่อผู้ใช้
             sql = """
-                INSERT INTO queue_entries (queue_id, name, phone, notes, position, status)
-                VALUES (%s, %s, %s, %s, %s, 'waiting')
+                INSERT INTO queue_entries (queue_id, name, phone, notes, position, status, created_by)
+                VALUES (%s, %s, %s, %s, %s, 'waiting', %s)
             """
             new_id = str(uuid.uuid4())
-            cursor.execute(sql, (new_id, name, phone, notes, next_position))
+            # 4. ส่งค่า username เข้าไปใน Execute tuple ด้วย
+            cursor.execute(sql, (new_id, name, phone, notes, next_position, username))
             
         db.commit()
         return {"status": "success", "queue_id": new_id, "position": next_position}
     except Exception as e:
+        if db: db.rollback()
         return {"status": "error", "message": str(e)}, 500
     finally:
-        db.close()
-
+        if db: db.close()
 
 if __name__ == '__main__':
     init_app()
