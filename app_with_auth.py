@@ -951,39 +951,6 @@ def reserve():
         "estimated_wait_minutes": position * 5
     })
 
-@app.route('/add-queue', methods=['POST'])
-def add_queue():
-    name = request.form.get('name')
-    phone = request.form.get('phone')
-    notes = request.form.get('notes')
-    # 1. ต้องดึง username จาก session มาด้วยเพื่อให้ระบบรู้ว่าใครจอง
-    username = session.get('username') 
-
-    db = get_db_connection()
-    try:
-        with db.cursor() as cursor:
-            # 2. คำนวณลำดับคิวถัดไป
-            cursor.execute("SELECT MAX(position) as max_pos FROM queue_entries WHERE status = 'waiting'")
-            result = cursor.fetchone()
-            next_position = (result['max_pos'] or 0) + 1
-            
-            # 3. เพิ่ม created_by ลงในคำสั่ง SQL เพื่อผูกคิวกับชื่อผู้ใช้
-            sql = """
-                INSERT INTO queue_entries (queue_id, name, phone, notes, position, status, created_by)
-                VALUES (%s, %s, %s, %s, %s, 'waiting', %s)
-            """
-            new_id = str(uuid.uuid4())
-            # 4. ส่งค่า username เข้าไปใน Execute tuple ด้วย
-            cursor.execute(sql, (new_id, name, phone, notes, next_position, username))
-            
-        db.commit()
-        return {"status": "success", "queue_id": new_id, "position": next_position}
-    except Exception as e:
-        if db: db.rollback()
-        return {"status": "error", "message": str(e)}, 500
-    finally:
-        if db: db.close()
-
 @app.route('/queue', methods=['GET'])
 @handle_errors
 @login_required
@@ -1108,42 +1075,19 @@ def show_history():
 @handle_errors
 @admin_required
 def clear_queue():
-    """ล้างคิวทั้งหมดใน Cloud SQL (Admin เท่านั้น)"""
-    db = get_db_connection()
-    if not db:
-        return jsonify({"success": False, "message": "เชื่อมต่อฐานข้อมูลล้มเหลว"}), 500
-        
-    try:
-        with db.cursor() as cursor:
-            # 1. เปลี่ยนสถานะคิวที่ยังรออยู่ (waiting) ทั้งหมดให้เป็น 'cancelled'
-            # เพื่อให้หายไปจากหน้าจอจองคิว แต่ข้อมูลยังอยู่ใน DB เพื่อดูรายงานย้อนหลังได้
-            sql = "UPDATE queue_entries SET status = 'cancelled' WHERE status = 'waiting'"
-            cursor.execute(sql)
-            cleared_count = cursor.rowcount
-            
-        db.commit()
-        
-        # 2. ล้างข้อมูลในตัวแปร Memory ด้วยเพื่อความชัวร์ (ป้องกัน Error จากจุดอื่น)
-        with lock:
-            queue.clear()
-            
-        # 3. ส่งแจ้งเตือน Real-time บอกทุกหน้าจอว่าคิวถูกล้างแล้ว
-        if 'pubsub' in globals():
-            pubsub.publish(PubSubEvent.QUEUE_CLEARED, {"cleared_count": cleared_count})
-            
-        logger.info(f"Cleared {cleared_count} items from SQL queue by {session.get('username')}")
-        
-        return jsonify({
-            "success": True,
-            "message": "ล้างคิวเรียบร้อย",
-            "cleared": cleared_count
-        })
-    except Exception as e:
-        if db: db.rollback()
-        logger.error(f"Error in clear_queue: {str(e)}")
-        return jsonify({"success": False, "error": str(e)}), 500
-    finally:
-        if db: db.close()
+    """Clear the entire queue (Admin only)"""
+    with lock:
+        cleared_count = len(queue)
+        queue.clear()
+        logger.info(f"Cleared {cleared_count} items from queue by {session.get('username')}")
+    
+    pubsub.publish(PubSubEvent.QUEUE_CLEARED, {"cleared_count": cleared_count})
+    
+    return jsonify({
+        "success": True,
+        "message": "ล้างคิวเรียบร้อย",
+        "cleared": cleared_count
+    })
 
 @app.route('/health', methods=['GET'])
 def health_check():
