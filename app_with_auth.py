@@ -34,7 +34,64 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+# ============================================================================
+# USER MANAGEMENT
+# ============================================================================
 
+class UserRole(Enum):
+    """User roles"""
+    USER = "user"
+    ADMIN = "admin"
+
+@dataclass
+class User:
+    """User model"""
+    username: str
+    password_hash: str
+    role: UserRole
+    created_at: str
+    
+    def check_password(self, password: str) -> bool:
+        """Verify password"""
+        return self.password_hash == self._hash_password(password)
+    
+    @staticmethod
+    def _hash_password(password: str) -> str:
+        """Hash password with SHA-256"""
+        return hashlib.sha256(password.encode()).hexdigest()
+    
+    def to_dict(self):
+        return {
+            'username': self.username,
+            'role': self.role.value,
+            'created_at': self.created_at
+        }
+
+# In-memory user database (ในการใช้งานจริงควรใช้ database)
+users_db = {}
+users_lock = Lock()
+
+def init_default_users():
+    """Initialize default admin and test user"""
+    with users_lock:
+        # Admin account
+        users_db['admin'] = User(
+            username='admin',
+            password_hash=User._hash_password('admin123'),  # เปลี่ยนรหัสผ่านในการใช้งานจริง!
+            role=UserRole.ADMIN,
+            created_at=datetime.now().isoformat()
+        )
+        
+        # Test user account
+        users_db['user'] = User(
+            username='user',
+            password_hash=User._hash_password('user123'),
+            role=UserRole.USER,
+            created_at=datetime.now().isoformat()
+        )
+    
+    logger.info("Default users initialized (admin/admin123, user/user123)")
+    
 # ============================================================================
 # AUTHENTICATION DECORATORS
 # ============================================================================
@@ -269,7 +326,7 @@ class PubSubSystem:
         # จึงปล่อยว่างไว้เพื่อไม่ให้โค้ดส่วนอื่นที่เรียกฟังก์ชันนี้พัง
         return thread_queue.Queue()
 
- # pubsub = PubSubSystem()
+ pubsub = PubSubSystem()
 
 # ============================================================================
 # SCHEDULER LOGS
